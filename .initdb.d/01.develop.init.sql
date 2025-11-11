@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS keycloak (
 
 INSERT INTO keycloak (realm, client_id, client_secret)
 VALUES (
-    'acme', 'acme-main', 'CARAFkI6QllYpfxrzIlLIhZU0DDiKYzK'
+    'acme', 'acme-main', 'S47xrVt5Rk9DxWCEixELQZmoCLteuPOV'
 );

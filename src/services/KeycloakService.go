@@ -10,10 +10,10 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/coreos/go-oidc"
 	"github.com/retroruk/centralized-devops-auth/src/models"
+	"github.com/retroruk/centralized-devops-auth/src/utilities"
 	"golang.org/x/oauth2"
 )
 
@@ -27,12 +27,14 @@ type KeycloakClient struct {
 type KeycloakService struct {
 	db      *sql.DB
 	baseURL string
+	authURL string
 }
 
 func InitKeycloakService(db *sql.DB) *KeycloakService {
 	return &KeycloakService{
 		db:      db,
-		baseURL: os.Getenv("KEYCLOAK_BASE_URL"),
+		baseURL: utilities.GetEnv("KEYCLOAK_BASE_URL"),
+		authURL: utilities.GetEnv("AUTH_URL"),
 	}
 }
 
@@ -44,7 +46,7 @@ func (s KeycloakService) GenerateState() string {
 
 func (s KeycloakService) GetConfig(realm string) (*oauth2.Config, string, error) {
 	oauthConfig := &oauth2.Config{
-		RedirectURL: fmt.Sprintf("http://localhost:5001/auth/callback"),
+		RedirectURL: fmt.Sprintf("%s/auth/callback", s.authURL),
 		Scopes:      []string{oidc.ScopeOpenID, "profile", "email"},
 	}
 

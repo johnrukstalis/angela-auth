@@ -1,3 +1,5 @@
+# This docker compose is used to setup keycloak and the database the auth microserve will use
+
 services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.4.4
@@ -5,37 +7,21 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     ports:
-      - 8080:8080
+      - 8020:8080
     volumes:
       - kcdata:/opt/keycloak/data
     command: start-dev
 
-  db:
+  auth-db:
     image: postgres:18
     environment:
       POSTGRES_PASSWORD: password
     ports:
-      - 5432:5432
+      - 5420:5432
     volumes:
       - pgdata:/var/lib/postgresql
-      - ./init:/docker-entrypoint-initdb.d
-
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: password
-      DB_NAME: postgres
-      DB_SSLMODE: disable
-      KEYCLOAK_BASE_URL: http://keycloak:8080
-      BACKEND_URL: http://localhost:5010
-    ports:
-      - 5001:5001
+      - ./.initdb.d:/docker-entrypoint-initdb.d
 
 volumes:
-  pgdata:
   kcdata:
+  pgdata:

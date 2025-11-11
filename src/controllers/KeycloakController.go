@@ -4,18 +4,20 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/retroruk/centralized-devops-auth/src/services"
+	"github.com/retroruk/centralized-devops-auth/src/utilities"
 )
 
 type KeycloakController struct {
 	keycloakService *services.KeycloakService
+	backendURL      string
 }
 
 func InitKeycloakController(mux *http.ServeMux, keycloakService *services.KeycloakService) {
 	c := &KeycloakController{
 		keycloakService: keycloakService,
+		backendURL:      utilities.GetEnv("BACKEND_ORCHESTRATOR_URL"),
 	}
 
 	mux.HandleFunc("/auth/login", c.login)
@@ -37,7 +39,7 @@ func (c KeycloakController) login(w http.ResponseWriter, r *http.Request) {
 		Name:     "oauth_state",
 		Value:    state,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -47,7 +49,6 @@ func (c KeycloakController) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c KeycloakController) handleCallback(w http.ResponseWriter, r *http.Request) {
-	log.Println("got callback")
 	state, err := r.Cookie("oauth_state")
 	if err != nil {
 		http.Error(w, "Missing state cookie", http.StatusBadRequest)
@@ -71,6 +72,5 @@ func (c KeycloakController) handleCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("%s/auth/success?access_token=%s", os.Getenv("BACKEND_URL"), userToken.AccessToken), http.StatusFound)
-	log.Println("redirected callback")
+	http.Redirect(w, r, fmt.Sprintf("%s/auth/success?access_token=%s", c.backendURL, userToken.AccessToken), http.StatusFound)
 }
