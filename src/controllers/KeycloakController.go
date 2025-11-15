@@ -22,41 +22,53 @@ func InitKeycloakController(mux *http.ServeMux, keycloakService *services.Keyclo
 
 	mux.HandleFunc("/auth/login", c.login)
 	mux.HandleFunc("/auth/callback", c.handleCallback)
+	mux.HandleFunc("/auth/session", c.checkSession)
+	mux.HandleFunc("/auth/refreshToken", c.refreshToken)
 }
 
 func (c KeycloakController) login(w http.ResponseWriter, r *http.Request) {
-	log.Println("Attempting login")
-
 	realm := r.URL.Query().Get("realm")
+	if realm == "" {
+		http.Error(w, "realm parameter is required", http.StatusBadRequest)
+		return
+	}
 
-	oauthConfig, state, err := c.keycloakService.GetConfig(realm)
+	session, sessionID, err := c.keycloakService.CreateSession(realm)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to create authenication session", http.StatusInternalServerError)
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "oauth_state",
-		Value:    state,
+		Name:     "sessionID",
+		Value:    sessionID,
 		HttpOnly: true,
 		Secure:   false,
+		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
+		MaxAge:   300,
 	})
 
-	url := oauthConfig.AuthCodeURL(state)
+	url := session.OauthConfig.AuthCodeURL(sessionID)
 	http.Redirect(w, r, url, http.StatusFound)
-	log.Println("redirected login")
 }
 
 func (c KeycloakController) handleCallback(w http.ResponseWriter, r *http.Request) {
-	state, err := r.Cookie("oauth_state")
+	sessionID, err := r.Cookie("sessionID")
 	if err != nil {
 		http.Error(w, "Missing state cookie", http.StatusBadRequest)
 		return
 	}
 
-	if r.URL.Query().Get("state") != state.Value {
-		http.Error(w, "Invalid state", http.StatusBadRequest)
+	http.SetCookie(w, &http.Cookie{
+		Name:   "sessionID",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+
+	if r.URL.Query().Get("state") != sessionID.Value {
+		http.Error(w, "Invalid sessionID", http.StatusBadRequest)
 		return
 	}
 
@@ -66,11 +78,40 @@ func (c KeycloakController) handleCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userToken, err := c.keycloakService.HandleCallback(state.Value, code)
+	_, err = c.keycloakService.HandleCallback(sessionID.Value, code)
 	if err != nil {
 		http.Error(w, "Failed to handle callback: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("%s/auth/success?access_token=%s", c.backendURL, userToken.AccessToken), http.StatusFound)
+	http.Redirect(w, r, fmt.Sprintf("%s/auth/success?sessionID=%s", c.backendURL, sessionID.Value), http.StatusFound)
+}
+
+func (c KeycloakController) checkSession(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("sessionID")
+	if sessionID == "" {
+		http.Error(w, "sessionID paramter is required", http.StatusBadRequest)
+		return
+	}
+
+	_, err := c.keycloakService.GetSession(sessionID)
+	if err != nil {
+		http.Error(w, "no session exists", http.StatusUnauthorized)
+		return
+	}
+}
+
+func (c KeycloakController) refreshToken(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("sessionID")
+	if sessionID == "" {
+		http.Error(w, "sessionID paramter is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := c.keycloakService.RefreshTokens(sessionID); err != nil {
+		http.Error(w, "failed to refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	log.Println("refreshed token")
 }

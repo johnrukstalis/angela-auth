@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/retroruk/centralized-devops-auth/src/controllers"
 	"github.com/retroruk/centralized-devops-auth/src/services"
@@ -34,9 +36,20 @@ func main() {
 		log.Fatal("Cannot connect to database:", err)
 	}
 
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
+
+	_, err = rdb.Ping(context.Background()).Result()
+	if err != nil {
+		log.Fatal("failed to connect to redis")
+	}
+
 	mux := http.NewServeMux()
 
-	controllers.InitKeycloakController(mux, services.InitKeycloakService(db))
+	controllers.InitKeycloakController(mux, services.InitKeycloakService(db, rdb))
 
 	log.Println("Server started on port 5020")
 	if err := http.ListenAndServe(":5020", mux); err != nil {

@@ -1,6 +1,6 @@
 package models
 
-type KeycloakClaim struct {
+type KeycloakClaims struct {
 	Exp               int64  `json:"exp"`
 	Iat               int64  `json:"iat"`
 	AuthTime          int64  `json:"auth_time"`
