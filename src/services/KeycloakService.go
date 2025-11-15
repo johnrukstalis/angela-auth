@@ -270,3 +270,35 @@ func (s KeycloakService) RefreshTokens(sessionID string) error {
 
 	return s.SaveSession(sessionID, session, time.Duration(session.Tokens.ExpiresIn*int64(time.Second)))
 }
+
+func (s KeycloakService) Logout(sessionID string) error {
+	session, err := s.GetSession(sessionID)
+	if err != nil {
+		return err
+	}
+
+	var clientID string
+	row := s.db.QueryRow("SELECT client_id FROM keycloak WHERE realms = $1;", session.Realm)
+	if err := row.Scan(&clientID); err != nil {
+		return err
+	}
+
+	form := url.Values{}
+	form.Set("client_id", clientID)
+	form.Set("refresh_token", session.Tokens.RefreshToken)
+
+	url := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/logout", s.baseURL, session.Realm)
+	req, _ := http.NewRequest("POST", url, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	_, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if err := s.rdb.Del(context.Background(), sessionID).Err(); err != nil {
+		return err
+	}
+
+	return nil
+}

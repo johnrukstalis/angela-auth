@@ -21,6 +21,7 @@ func InitKeycloakController(mux *http.ServeMux, keycloakService *services.Keyclo
 	}
 
 	mux.HandleFunc("/auth/login", c.login)
+	mux.HandleFunc("/auth/logout", c.logout)
 	mux.HandleFunc("/auth/callback", c.handleCallback)
 	mux.HandleFunc("/auth/session", c.checkSession)
 	mux.HandleFunc("/auth/refreshToken", c.refreshToken)
@@ -51,6 +52,19 @@ func (c KeycloakController) login(w http.ResponseWriter, r *http.Request) {
 
 	url := session.OauthConfig.AuthCodeURL(sessionID)
 	http.Redirect(w, r, url, http.StatusFound)
+}
+
+func (c KeycloakController) logout(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := r.Cookie("sessionID")
+	if err != nil {
+		http.Error(w, "sessionID cookie is missing", http.StatusBadRequest)
+		return
+	}
+
+	if err := c.keycloakService.Logout(sessionID.Value); err != nil {
+		http.Error(w, "failed to logout", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (c KeycloakController) handleCallback(w http.ResponseWriter, r *http.Request) {
