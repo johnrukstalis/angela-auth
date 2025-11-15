@@ -1,8 +1,8 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/retroruk/centralized-devops-auth/src/services"
@@ -55,14 +55,14 @@ func (c KeycloakController) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c KeycloakController) logout(w http.ResponseWriter, r *http.Request) {
-	sessionID, err := r.Cookie("sessionID")
-	if err != nil {
-		http.Error(w, "sessionID cookie is missing", http.StatusBadRequest)
+	sessionID := r.URL.Query().Get("sessionID")
+	if sessionID == "" {
+		http.Error(w, "sessionID paramter is missing", http.StatusBadRequest)
 		return
 	}
 
-	if err := c.keycloakService.Logout(sessionID.Value); err != nil {
-		http.Error(w, "failed to logout", http.StatusInternalServerError)
+	if err := c.keycloakService.Logout(sessionID); err != nil {
+		http.Error(w, fmt.Sprintf("failed to logout: %v", err), http.StatusInternalServerError)
 		return
 	}
 }
@@ -122,10 +122,11 @@ func (c KeycloakController) refreshToken(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := c.keycloakService.RefreshTokens(sessionID); err != nil {
+	expiresIn, err := c.keycloakService.RefreshTokens(sessionID)
+	if err != nil {
 		http.Error(w, "failed to refresh token", http.StatusInternalServerError)
 		return
 	}
 
-	log.Println("refreshed token")
+	json.NewEncoder(w).Encode(map[string]int64{"expiresIn": expiresIn})
 }

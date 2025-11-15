@@ -168,6 +168,7 @@ func (s KeycloakService) ExchangeCodeForTokens(ctx context.Context, sessionID st
 	tokens.TokenType = t.TokenType
 	tokens.IDToken = rawIdToken
 	tokens.TokenType = t.TokenType
+	tokens.RefreshToken = t.RefreshToken
 
 	return tokens, nil
 }
@@ -229,17 +230,17 @@ func (s KeycloakService) ValidateIdToken(ctx context.Context, rawIdToken string,
 	return idToken, true
 }
 
-func (s KeycloakService) RefreshTokens(sessionID string) error {
+func (s KeycloakService) RefreshTokens(sessionID string) (int64, error) {
 	session, err := s.GetSession(sessionID)
 	if err != nil {
-		return err
+		return -1, err
 	}
 
 	var clientID string
 	var clientSecret string
 	row := s.db.QueryRow("SELECT client_id, client_secret FROM keycloak WHERE realm = $1", session.Realm)
 	if err := row.Scan(&clientID, &clientSecret); err != nil {
-		return err
+		return -1, err
 	}
 
 	data := url.Values{}
@@ -250,25 +251,28 @@ func (s KeycloakService) RefreshTokens(sessionID string) error {
 
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", s.baseURL, session.Realm), strings.NewReader(data.Encode()))
 	if err != nil {
-		return err
+		return -1, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return -1, err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to refresh token")
+		return -1, fmt.Errorf("failed to refresh token")
 	}
 
-	if err := json.NewDecoder(res.Body).Decode(&session.Tokens); err != nil {
-		return err
+	var tokens models.KeycloakTokens
+	if err := json.NewDecoder(res.Body).Decode(&tokens); err != nil {
+		return -1, err
 	}
 
-	return s.SaveSession(sessionID, session, time.Duration(session.Tokens.ExpiresIn*int64(time.Second)))
+	session.Tokens = tokens
+
+	return session.Tokens.ExpiresIn, s.SaveSession(sessionID, session, time.Duration(session.Tokens.ExpiresIn*int64(time.Second)))
 }
 
 func (s KeycloakService) Logout(sessionID string) error {
@@ -278,22 +282,28 @@ func (s KeycloakService) Logout(sessionID string) error {
 	}
 
 	var clientID string
-	row := s.db.QueryRow("SELECT client_id FROM keycloak WHERE realms = $1;", session.Realm)
-	if err := row.Scan(&clientID); err != nil {
+	var clientSecret string
+	row := s.db.QueryRow("SELECT client_id, client_secret FROM keycloak WHERE realm = $1;", session.Realm)
+	if err := row.Scan(&clientID, &clientSecret); err != nil {
 		return err
 	}
 
 	form := url.Values{}
 	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
 	form.Set("refresh_token", session.Tokens.RefreshToken)
 
 	url := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/logout", s.baseURL, session.Realm)
 	req, _ := http.NewRequest("POST", url, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	_, err = http.DefaultClient.Do(req)
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
+	}
+
+	if res.StatusCode != 204 {
+		return fmt.Errorf("failed to logout")
 	}
 
 	if err := s.rdb.Del(context.Background(), sessionID).Err(); err != nil {
