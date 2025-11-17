@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/retroruk/centralized-devops-auth/src/services"
@@ -22,21 +23,25 @@ func InitKeycloakController(mux *http.ServeMux, keycloakService *services.Keyclo
 
 	mux.HandleFunc("/auth/login", c.login)
 	mux.HandleFunc("/auth/logout", c.logout)
-	mux.HandleFunc("/auth/callback", c.handleCallback)
+	mux.HandleFunc("/auth/callback/login", c.handleLoginCallback)
 	mux.HandleFunc("/auth/session", c.checkSession)
 	mux.HandleFunc("/auth/refreshToken", c.refreshToken)
+	mux.HandleFunc("/auth/realmExists", c.realmExists)
+	mux.HandleFunc("/auth/createRealm", c.createRealm)
+	mux.HandleFunc("/auth/createClient", c.createClient)
+	mux.HandleFunc("/auth/callback/emailActions", c.handleEmailActionsCallback)
 }
 
 func (c KeycloakController) login(w http.ResponseWriter, r *http.Request) {
 	realm := r.URL.Query().Get("realm")
 	if realm == "" {
-		http.Error(w, "realm parameter is required", http.StatusBadRequest)
+		http.Redirect(w, r, fmt.Sprintf("%s/?error=invalid_realm", c.backendURL), http.StatusFound)
 		return
 	}
 
 	session, sessionID, err := c.keycloakService.CreateSession(realm)
 	if err != nil {
-		http.Error(w, "failed to create authenication session", http.StatusInternalServerError)
+		http.Redirect(w, r, fmt.Sprintf("%s/?error=invalid_realm", c.backendURL), http.StatusFound)
 		return
 	}
 
@@ -67,7 +72,11 @@ func (c KeycloakController) logout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c KeycloakController) handleCallback(w http.ResponseWriter, r *http.Request) {
+func (c KeycloakController) handleEmailActionsCallback(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, fmt.Sprintf("%s/auth/callback/emailActions", c.backendURL), http.StatusFound)
+}
+
+func (c KeycloakController) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := r.Cookie("sessionID")
 	if err != nil {
 		http.Error(w, "Missing state cookie", http.StatusBadRequest)
@@ -92,13 +101,13 @@ func (c KeycloakController) handleCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	_, err = c.keycloakService.HandleCallback(sessionID.Value, code)
+	_, err = c.keycloakService.HandleLoginCallback(sessionID.Value, code)
 	if err != nil {
 		http.Error(w, "Failed to handle callback: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("%s/auth/success?sessionID=%s", c.backendURL, sessionID.Value), http.StatusFound)
+	http.Redirect(w, r, fmt.Sprintf("%s/auth/callback/login?sessionID=%s", c.backendURL, sessionID.Value), http.StatusFound)
 }
 
 func (c KeycloakController) checkSession(w http.ResponseWriter, r *http.Request) {
@@ -129,4 +138,72 @@ func (c KeycloakController) refreshToken(w http.ResponseWriter, r *http.Request)
 	}
 
 	json.NewEncoder(w).Encode(map[string]int64{"expiresIn": expiresIn})
+}
+
+func (c KeycloakController) realmExists(w http.ResponseWriter, r *http.Request) {
+	realm := r.URL.Query().Get("realm")
+	if realm == "" {
+		http.Error(w, "realm parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	exists, err := c.keycloakService.RealmExists(realm)
+	if err != nil {
+		http.Error(w, "failed to check if realm exists", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]bool{"exists": exists})
+}
+
+func (c KeycloakController) createRealm(w http.ResponseWriter, r *http.Request) {
+	realm := r.URL.Query().Get("realm")
+	if realm == "" {
+		http.Error(w, "realm parameter required", http.StatusBadRequest)
+		return
+	}
+
+	rootUserEmail := r.URL.Query().Get("rootUserEmail")
+	if rootUserEmail == "" {
+		http.Error(w, "rootUserEmail parameter required", http.StatusBadRequest)
+		return
+	}
+
+	smtpEmail := r.URL.Query().Get("smtpEmail")
+	if smtpEmail == "" {
+		http.Error(w, "smtpEmail parameter required", http.StatusBadRequest)
+		return
+	}
+
+	smtpPassword := r.URL.Query().Get("smtpPassword")
+	if smtpPassword == "" {
+		http.Error(w, "smtpPassword parameter required", http.StatusBadRequest)
+		return
+	}
+
+	if err := c.keycloakService.CreateRealm(realm, rootUserEmail, smtpEmail, smtpPassword); err != nil {
+		log.Println(err)
+		http.Error(w, "failed to create realm", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (c KeycloakController) createClient(w http.ResponseWriter, r *http.Request) {
+	realm := r.URL.Query().Get("realm")
+	if realm == "" {
+		http.Error(w, "realm parameter required", http.StatusBadRequest)
+		return
+	}
+
+	token, err := c.keycloakService.LoginAsAdmin()
+	if err != nil {
+		http.Error(w, "failed to login as admin", http.StatusUnauthorized)
+		return
+	}
+
+	_, err = c.keycloakService.CreateClient(realm, token)
+	if err != nil {
+		http.Error(w, "failed to create client", http.StatusInternalServerError)
+		return
+	}
 }

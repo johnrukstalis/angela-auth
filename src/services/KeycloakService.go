@@ -1,12 +1,16 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -25,24 +29,26 @@ type KeycloakClient struct {
 }
 
 type KeycloakService struct {
-	db      *sql.DB
-	rdb     *redis.Client
-	baseURL string
-	authURL string
+	db           *sql.DB
+	rdb          *redis.Client
+	baseURL      string
+	authURL      string
+	smtpPassword string
 }
 
 func InitKeycloakService(db *sql.DB, rdb *redis.Client) *KeycloakService {
 	return &KeycloakService{
-		db:      db,
-		rdb:     rdb,
-		baseURL: utilities.GetEnv("KEYCLOAK_BASE_URL"),
-		authURL: utilities.GetEnv("AUTH_URL"),
+		db:           db,
+		rdb:          rdb,
+		baseURL:      utilities.GetEnv("KEYCLOAK_BASE_URL"),
+		authURL:      utilities.GetEnv("AUTH_URL"),
+		smtpPassword: utilities.GetEnv("SMTP_PASSWORD"),
 	}
 }
 
 func (s KeycloakService) CreateSession(realm string) (models.OauthSession, string, error) {
 	oauthConfig := &oauth2.Config{
-		RedirectURL: fmt.Sprintf("%s/auth/callback", s.authURL),
+		RedirectURL: fmt.Sprintf("%s/auth/callback/login", s.authURL),
 		Scopes:      []string{oidc.ScopeOpenID, "profile", "email"},
 	}
 
@@ -95,7 +101,7 @@ func (s KeycloakService) GetSession(sessionID string) (models.OauthSession, erro
 	return session, nil
 }
 
-func (s KeycloakService) HandleCallback(sessionID string, code string) (string, error) {
+func (s KeycloakService) HandleLoginCallback(sessionID string, code string) (string, error) {
 	ctx := context.Background()
 
 	session, err := s.GetSession(sessionID)
@@ -308,6 +314,302 @@ func (s KeycloakService) Logout(sessionID string) error {
 
 	if err := s.rdb.Del(context.Background(), sessionID).Err(); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (s KeycloakService) RealmExists(realm string) (bool, error) {
+	url := fmt.Sprintf("%s/realms/%s/.well-known/openid-configuration", s.baseURL, realm)
+
+	res, err := http.Get(url)
+	if err != nil {
+		return false, err
+	}
+	return res.StatusCode == http.StatusOK, nil
+}
+
+func (s KeycloakService) LoginAsAdmin() (string, error) {
+	form := url.Values{}
+	form.Set("client_id", "admin-cli")
+	form.Set("username", "admin") //TODO: update this to pull from secret store
+	form.Set("password", "admin") //TODO: update this to pull form secret store
+	form.Set("grant_type", "password")
+
+	url := fmt.Sprintf("%s/realms/master/protocol/openid-connect/token", s.baseURL)
+	res, err := http.Post(url, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var data struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+		ExpiresIn   int    `json:"expires_in"`
+	}
+
+	if err := json.Unmarshal(body, &data); err != nil {
+		return "", err
+	}
+
+	return data.AccessToken, nil
+}
+
+func (s KeycloakService) CreateRealm(realm, rootUserEmail, smtpEmail, smtpPassword string) error {
+	payload := map[string]any{
+		"realm":   realm,
+		"enabled": true,
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/admin/realms", s.baseURL)
+
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(jsonPayload)))
+	if err != nil {
+		return err
+	}
+
+	token, err := s.LoginAsAdmin()
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusCreated {
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("failed to create realm with status code %d, error: %v", res.StatusCode, string(body))
+	}
+
+	if err := s.SetupRealmEmail(realm, token, smtpEmail, smtpPassword); err != nil {
+		return err
+	}
+
+	clientSecret, err := s.CreateClient(realm, token)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Query("INSERT INTO keycloak (client_id, client_secret, realm) VALUES ($1, $2, $3);", realm, clientSecret, realm)
+	if err != nil {
+		return err
+	}
+
+	userID, err := s.CreateUser(realm, rootUserEmail, token)
+	if err != nil {
+		return err
+	}
+
+	if err := s.SendExecuteActionsEmail(realm, realm, userID, token); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s KeycloakService) SetupRealmEmail(realm, token, smtpEmail, smtpPassword string) error {
+	payload := models.KeycloakRealmStmpRequest{
+		SMTPServer: models.KeycloakSmtpServer{
+			Host:            "smtp.gmail.com",
+			Port:            "587",
+			From:            smtpEmail,
+			FromDisplayName: "Angela App",
+			User:            smtpEmail,
+			Password:        smtpPassword,
+			Auth:            "true",
+			StartTLS:        "true",
+			AllowUTF8:       "true",
+		},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/admin/realms/%s", s.baseURL, realm)
+
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("failed to create client, error: %v, response: %s", err, string(body))
+	}
+
+	return nil
+}
+
+func (s KeycloakService) CreateClient(realm string, token string) (string, error) {
+	clientSecret := utilities.GenerateRandomEncodedByteString(32)
+
+	payload := models.KeycloakCreateClientRequest{
+		ClientID:     realm,
+		Secret:       clientSecret,
+		Protocol:     "openid-connect",
+		PublicClient: false,
+		RedirectURIs: []string{
+			fmt.Sprintf("%s/auth/callback/login", s.authURL),
+			fmt.Sprintf("%s/auth/callback/emailActions", s.authURL),
+		},
+		StandardFlowEnabled:       true,
+		DirectAccessGrantsEnabled: true,
+		ServiceAccountsEnabled:    true,
+		RootURL:                   fmt.Sprintf("%s", s.authURL),
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	url := fmt.Sprintf("%s/admin/realms/%s/clients", s.baseURL, realm)
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusCreated {
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return "", err
+		}
+		return "", fmt.Errorf("failed to create client, error: %v, response: %s", err, string(body))
+	}
+
+	return clientSecret, nil
+}
+
+func (s KeycloakService) CreateUser(realm string, email string, token string) (string, error) {
+	username, _, found := strings.Cut(email, "@")
+	if !found {
+		return "", fmt.Errorf("infalid email address")
+	}
+
+	payload := models.KeycloakCreateUserRequest{
+		Username: username,
+		Email:    email,
+		Enabled:  true,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	url := fmt.Sprintf("%s/admin/realms/%s/users", s.baseURL, realm)
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusCreated {
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return "", err
+		}
+		return "", fmt.Errorf("failed to create user, error: %v, response: %s", err, string(body))
+	}
+
+	location := res.Header.Get("Location")
+	userID := path.Base(location)
+
+	return userID, nil
+}
+
+func (s KeycloakService) SendExecuteActionsEmail(realm string, clientID string, userID string, token string) error {
+	redirectURI := fmt.Sprintf("%s/auth/callback/emailActions", s.authURL)
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/execute-actions-email?client_id=%s&redirect_uri=%s",
+		s.baseURL, realm, userID, clientID, url.QueryEscape(redirectURI))
+
+	payload := []string{"VERIFY_EMAIL", "UPDATE_PASSWORD"}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNoContent {
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("failed to send execute actions email, error: %v, response: %s", err, string(body))
 	}
 
 	return nil
