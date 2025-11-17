@@ -31,6 +31,7 @@ type KeycloakClient struct {
 type KeycloakService struct {
 	db      *sql.DB
 	rdb     *redis.Client
+	client  *http.Client
 	baseURL string
 	authURL string
 }
@@ -39,6 +40,7 @@ func InitKeycloakService(db *sql.DB, rdb *redis.Client) *KeycloakService {
 	return &KeycloakService{
 		db:      db,
 		rdb:     rdb,
+		client:  utilities.NewHttpClient(),
 		baseURL: utilities.GetEnv("KEYCLOAK_BASE_URL"),
 		authURL: utilities.GetEnv("AUTH_URL"),
 	}
@@ -189,8 +191,7 @@ func (s KeycloakService) GetUserInfo(realm string, accessToken string) (models.K
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := s.client.Do(req)
 	if err != nil {
 		return userInfo, err
 	}
@@ -259,7 +260,7 @@ func (s KeycloakService) RefreshTokens(sessionID string) (int64, error) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := s.client.Do(req)
 	if err != nil {
 		return -1, err
 	}
@@ -301,7 +302,7 @@ func (s KeycloakService) Logout(sessionID string) error {
 	req, _ := http.NewRequest("POST", url, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := s.client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -320,7 +321,12 @@ func (s KeycloakService) Logout(sessionID string) error {
 func (s KeycloakService) RealmExists(realm string) (bool, error) {
 	url := fmt.Sprintf("%s/realms/%s/.well-known/openid-configuration", s.baseURL, realm)
 
-	res, err := http.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return false, err
+	}
+
+	res, err := s.client.Do(req)
 	if err != nil {
 		return false, err
 	}
@@ -335,7 +341,15 @@ func (s KeycloakService) LoginAsAdmin() (string, error) {
 	form.Set("grant_type", "password")
 
 	url := fmt.Sprintf("%s/realms/master/protocol/openid-connect/token", s.baseURL)
-	res, err := http.Post(url, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	res, err := s.client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -366,14 +380,14 @@ func (s KeycloakService) CreateRealm(realm, rootUserEmail, smtpEmail, smtpPasswo
 		"enabled": true,
 	}
 
-	jsonPayload, err := json.Marshal(payload)
+	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 
 	url := fmt.Sprintf("%s/admin/realms", s.baseURL)
 
-	req, err := http.NewRequest("POST", url, strings.NewReader(string(jsonPayload)))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return err
 	}
@@ -386,7 +400,7 @@ func (s KeycloakService) CreateRealm(realm, rootUserEmail, smtpEmail, smtpPasswo
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := s.client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -457,7 +471,7 @@ func (s KeycloakService) SetupRealmEmail(realm, token, smtpEmail, smtpPassword s
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := s.client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -508,7 +522,7 @@ func (s KeycloakService) CreateClient(realm string, token string) (string, error
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := s.client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -553,7 +567,7 @@ func (s KeycloakService) CreateUser(realm string, email string, token string) (s
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := s.client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -594,7 +608,7 @@ func (s KeycloakService) SendExecuteActionsEmail(realm string, clientID string, 
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := s.client.Do(req)
 	if err != nil {
 		log.Println(err)
 		return err
