@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/retroruk/centralized-devops-auth/src/models"
 	"github.com/retroruk/centralized-devops-auth/src/services"
 	"github.com/retroruk/centralized-devops-auth/src/utilities"
 )
@@ -18,7 +19,7 @@ type KeycloakController struct {
 func InitKeycloakController(mux *http.ServeMux, keycloakService *services.KeycloakService) {
 	c := &KeycloakController{
 		keycloakService: keycloakService,
-		backendURL:      utilities.GetEnv("BACKEND_ORCHESTRATOR_URL"),
+		backendURL:      utilities.GetEnv("BACKEND_URL"),
 	}
 
 	mux.HandleFunc("/auth/login", c.login)
@@ -157,31 +158,15 @@ func (c KeycloakController) realmExists(w http.ResponseWriter, r *http.Request) 
 }
 
 func (c KeycloakController) createRealm(w http.ResponseWriter, r *http.Request) {
-	realm := r.URL.Query().Get("realm")
-	if realm == "" {
-		http.Error(w, "realm parameter required", http.StatusBadRequest)
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	rootUserEmail := r.URL.Query().Get("rootUserEmail")
-	if rootUserEmail == "" {
-		http.Error(w, "rootUserEmail parameter required", http.StatusBadRequest)
-		return
-	}
+	var createRealmRequest models.CreateRealmRequest
+	json.NewDecoder(r.Body).Decode(&createRealmRequest)
 
-	smtpEmail := r.URL.Query().Get("smtpEmail")
-	if smtpEmail == "" {
-		http.Error(w, "smtpEmail parameter required", http.StatusBadRequest)
-		return
-	}
-
-	smtpPassword := r.URL.Query().Get("smtpPassword")
-	if smtpPassword == "" {
-		http.Error(w, "smtpPassword parameter required", http.StatusBadRequest)
-		return
-	}
-
-	if err := c.keycloakService.CreateRealm(realm, rootUserEmail, smtpEmail, smtpPassword); err != nil {
+	if err := c.keycloakService.CreateRealm(createRealmRequest); err != nil {
 		log.Println(err)
 		http.Error(w, "failed to create realm", http.StatusInternalServerError)
 		return

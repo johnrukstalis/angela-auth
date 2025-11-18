@@ -42,7 +42,7 @@ func InitKeycloakService(db *sql.DB, rdb *redis.Client) *KeycloakService {
 		rdb:     rdb,
 		client:  utilities.NewHttpClient(),
 		baseURL: utilities.GetEnv("KEYCLOAK_BASE_URL"),
-		authURL: utilities.GetEnv("AUTH_URL"),
+		authURL: utilities.GetEnv("AUTH_SERVICE_URL"),
 	}
 }
 
@@ -374,9 +374,9 @@ func (s KeycloakService) LoginAsAdmin() (string, error) {
 	return data.AccessToken, nil
 }
 
-func (s KeycloakService) CreateRealm(realm, rootUserEmail, smtpEmail, smtpPassword string) error {
+func (s KeycloakService) CreateRealm(createRealmRequest models.CreateRealmRequest) error {
 	payload := map[string]any{
-		"realm":   realm,
+		"realm":   createRealmRequest.Realm,
 		"enabled": true,
 	}
 
@@ -415,26 +415,31 @@ func (s KeycloakService) CreateRealm(realm, rootUserEmail, smtpEmail, smtpPasswo
 		return fmt.Errorf("failed to create realm with status code %d, error: %v", res.StatusCode, string(body))
 	}
 
-	if err := s.SetupRealmEmail(realm, token, smtpEmail, smtpPassword); err != nil {
+	if err := s.SetupRealmEmail(
+		createRealmRequest.Realm,
+		token,
+		createRealmRequest.SmtpEmail,
+		createRealmRequest.SmtpPassword,
+	); err != nil {
 		return err
 	}
 
-	clientSecret, err := s.CreateClient(realm, token)
+	clientSecret, err := s.CreateClient(createRealmRequest.Realm, token)
 	if err != nil {
 		return err
 	}
 
-	_, err = s.db.Query("INSERT INTO keycloak (client_id, client_secret, realm) VALUES ($1, $2, $3);", realm, clientSecret, realm)
+	_, err = s.db.Query("INSERT INTO keycloak (client_id, client_secret, realm) VALUES ($1, $2, $3);", createRealmRequest.Realm, clientSecret, createRealmRequest.Realm)
 	if err != nil {
 		return err
 	}
 
-	userID, err := s.CreateUser(realm, rootUserEmail, token)
+	userID, err := s.CreateUser(createRealmRequest.Realm, createRealmRequest.Email, token)
 	if err != nil {
 		return err
 	}
 
-	if err := s.SendExecuteActionsEmail(realm, realm, userID, token); err != nil {
+	if err := s.SendExecuteActionsEmail(createRealmRequest.Realm, createRealmRequest.Realm, userID, token); err != nil {
 		return err
 	}
 
