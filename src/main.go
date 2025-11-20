@@ -51,6 +51,9 @@ func main() {
 
 	controllers.InitKeycloakController(mux, services.InitKeycloakService(db, rdb))
 
+	sessionService := services.InitSessionService(db, rdb)
+	controllers.InitSessionController(mux, sessionService)
+
 	log.Println("Server started on port 5020")
 	if err := http.ListenAndServe(":5020", mux); err != nil {
 		log.Fatal("failed to start server", err)
