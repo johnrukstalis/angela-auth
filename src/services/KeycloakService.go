@@ -68,7 +68,7 @@ func (s KeycloakService) CreateSession(realm string) (models.OauthSession, strin
 	sessionID := utilities.GenerateRandomEncodedByteString(32)
 	session := models.OauthSession{OauthConfig: oauthConfig, Realm: realm}
 
-	if err := s.SaveSession(sessionID, session, 5*time.Minute); err != nil {
+	if err := s.SaveSession(sessionID, session, 30*time.Minute); err != nil {
 		return models.OauthSession{}, "", err
 	}
 	return session, sessionID, nil
