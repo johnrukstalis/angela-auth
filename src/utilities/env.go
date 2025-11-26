@@ -10,6 +10,10 @@ var env = map[string]string{
 	"DB_NAME":     "postgres",
 	"DB_SSLMODE":  "disable",
 
+	"REDIS_ADDR":     "localhost:6320",
+	"REDIS_PASSWORD": "",
+	"REDIS_DB":       "0",
+
 	"KEYCLOAK_API":     "http://localhost:8080",
 	"AUTH_SERVICE_API": "http://localhost:5020",
 	"BACKEND_API":      "http://localhost:5010",

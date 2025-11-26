@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
@@ -36,10 +37,15 @@ func main() {
 		log.Fatal("Cannot connect to database:", err)
 	}
 
+	redisDB, err := strconv.Atoi(utilities.GetEnv("REDIS_DB"))
+	if err != nil {
+		log.Fatal("failed to parse int for redis db", err)
+	}
+
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
+		Addr:     utilities.GetEnv("REDIS_ADDR"),
+		Password: utilities.GetEnv("REDIS_PASSWORD"),
+		DB:       redisDB,
 	})
 
 	_, err = rdb.Ping(context.Background()).Result()
