@@ -77,6 +77,9 @@ func (s RealmService) Create(tenant, email string) error {
 					models.EmailActions.UpdatePassword,
 					models.EmailActions.VerifyEmail,
 				},
+				ClientRoles: map[string][]string{
+					tenant: s.getDefaultClientRoles(),
+				},
 			},
 		},
 		SMTPServer: models.SMTPRepresentation{

@@ -29,6 +29,7 @@ func InitSessionController(mux *http.ServeMux, sessionService *services.SessionS
 	sub.HandleFunc("/callback/login", c.loginCallback)
 	sub.HandleFunc("/getSession", c.getSession)
 	sub.HandleFunc("/getUserInfo", c.getUserInfo)
+	sub.HandleFunc("/hasRole", c.hasRole)
 
 	mux.Handle("/api/v1/auth/session/", http.StripPrefix("/api/v1/auth/session", sub))
 }
@@ -123,6 +124,27 @@ func (c SessionController) getSession(w http.ResponseWriter, r *http.Request) {
 	_, err := c.sessionService.GetSession(sessionID)
 	if err != nil {
 		zlog.HttpError(w, "no session exists", err, http.StatusUnauthorized)
+		return
+	}
+}
+
+// HAS ROLE
+func (c SessionController) hasRole(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("sessionID")
+	role := r.URL.Query().Get("role")
+	if sessionID == "" {
+		zlog.HttpError(w, "required param missing", nil, http.StatusBadRequest)
+		return
+	}
+
+	allowed, err := c.sessionService.HasRole(sessionID, role)
+	if err != nil {
+		zlog.HttpError(w, "no session exists", err, http.StatusUnauthorized)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(map[string]bool{"allowed": allowed}); err != nil {
+		zlog.HttpError(w, "failed to encode response", err, http.StatusInternalServerError)
 		return
 	}
 }

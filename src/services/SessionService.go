@@ -133,8 +133,14 @@ func (s SessionService) LoginCallback(sessionID string, code string) (string, er
 		return sessionID, err
 	}
 
-	claims, err := s.GetClaims(ctx, tokens.IDToken, session.Realm)
+	_, err = s.GetClaims(ctx, tokens.IDToken, session.Realm)
 	if err != nil {
+		return sessionID, err
+	}
+
+	accessClaims, err := s.GetAccessTokenClaims(ctx, tokens.AccessToken, session.Realm)
+	if err != nil {
+		zlog.Error("failed to get access token claims", err)
 		return sessionID, err
 	}
 
@@ -145,7 +151,7 @@ func (s SessionService) LoginCallback(sessionID string, code string) (string, er
 	}
 
 	session.Tokens = tokens
-	session.Claims = claims
+	session.Claims = accessClaims
 	session.UserInfo = userInfo
 	session.OauthConfig = nil // set to nil because it's not needed after the callback
 
@@ -168,6 +174,32 @@ func (s SessionService) GetClaims(ctx context.Context, rawIdToken string, realm 
 
 	if err := idToken.Claims(&claims); err != nil {
 		zlog.Error("could not get claims", err)
+		return claims, err
+	}
+
+	return claims, nil
+}
+
+func (s SessionService) GetAccessTokenClaims(ctx context.Context, rawAccessToken string, realm string) (models.KeycloakClaims, error) {
+	var claims models.KeycloakClaims
+
+	provider, err := oidc.NewProvider(ctx, fmt.Sprintf("%s/realms/%s", s.keycloakAPI, realm))
+	if err != nil {
+		return claims, err
+	}
+
+	verifier := provider.Verifier(&oidc.Config{
+		SkipClientIDCheck: true, // access tokens have no client_id claim
+		SkipExpiryCheck:   false,
+	})
+
+	// VERY IMPORTANT: verify ACCESS TOKEN, not id_token
+	accessToken, err := verifier.Verify(ctx, rawAccessToken)
+	if err != nil {
+		return claims, err
+	}
+
+	if err := accessToken.Claims(&claims); err != nil {
 		return claims, err
 	}
 
@@ -360,4 +392,20 @@ func (s SessionService) Logout(sessionID string) error {
 	}
 
 	return nil
+}
+
+func (s SessionService) HasRole(sessionID, role string) (bool, error) {
+	session, err := s.GetSession(sessionID)
+	if err != nil {
+		zlog.Error("failed to get session", err)
+		return false, err
+	}
+
+	for _, r := range session.Claims.ClientRoles[session.Realm].Roles {
+		if r == role {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
