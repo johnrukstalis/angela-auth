@@ -119,3 +119,14 @@ sequenceDiagram
     Backend -->> UI: 200 OK
     UI -->> User: Login View
 ```
+
+## Has Role Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    Backend ->> Auth Service: GET Request with sessionID and role
+    Auth Service ->> Redis: Get user session
+    Redis -->> Auth Service: Return user sesssion
+    Auth Service ->> Auth Service: Does user have role?
+    Auth Service -->> Backend: true or false
+```
