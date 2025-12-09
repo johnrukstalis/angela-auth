@@ -10,10 +10,10 @@ import (
 	"path"
 	"strings"
 
+	"github.com/johnrukstalis/angela-auth/src/models"
+	"github.com/johnrukstalis/angela-auth/src/utilities"
+	"github.com/johnrukstalis/zlog"
 	"github.com/redis/go-redis/v9"
-	"github.com/retroRUK/zlog"
-	"github.com/retroruk/angela-auth/src/models"
-	"github.com/retroruk/angela-auth/src/utilities"
 )
 
 type UserService struct {

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/retroruk/angela-auth/src/services"
-	"github.com/retroruk/angela-auth/src/utilities"
+	"github.com/johnrukstalis/angela-auth/src/services"
+	"github.com/johnrukstalis/angela-auth/src/utilities"
 )
 
 type EmailActionController struct {

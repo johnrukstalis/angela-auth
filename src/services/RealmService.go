@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/retroRUK/zlog"
-	"github.com/retroruk/angela-auth/src/models"
-	secretServices "github.com/retroruk/angela-auth/src/services/secrets"
-	"github.com/retroruk/angela-auth/src/utilities"
+	"github.com/johnrukstalis/angela-auth/src/models"
+	secretServices "github.com/johnrukstalis/angela-auth/src/services/secrets"
+	"github.com/johnrukstalis/angela-auth/src/utilities"
+	"github.com/johnrukstalis/zlog"
 )
 
 type RealmService struct {

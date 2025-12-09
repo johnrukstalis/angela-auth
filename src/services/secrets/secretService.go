@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/retroRUK/zlog"
-	"github.com/retroruk/angela-auth/src/utilities"
+	"github.com/johnrukstalis/angela-auth/src/utilities"
+	"github.com/johnrukstalis/zlog"
 )
 
 type SecretService struct {

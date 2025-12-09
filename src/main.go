@@ -11,10 +11,10 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/retroruk/angela-auth/src/controllers"
-	"github.com/retroruk/angela-auth/src/services"
-	secretServices "github.com/retroruk/angela-auth/src/services/secrets"
-	"github.com/retroruk/angela-auth/src/utilities"
+	"github.com/johnrukstalis/angela-auth/src/controllers"
+	"github.com/johnrukstalis/angela-auth/src/services"
+	secretServices "github.com/johnrukstalis/angela-auth/src/services/secrets"
+	"github.com/johnrukstalis/angela-auth/src/utilities"
 )
 
 func main() {

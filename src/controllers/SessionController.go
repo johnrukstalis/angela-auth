@@ -6,9 +6,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/retroRUK/zlog"
-	"github.com/retroruk/angela-auth/src/services"
-	"github.com/retroruk/angela-auth/src/utilities"
+	"github.com/johnrukstalis/angela-auth/src/services"
+	"github.com/johnrukstalis/angela-auth/src/utilities"
+	"github.com/johnrukstalis/zlog"
 )
 
 type SessionController struct {
