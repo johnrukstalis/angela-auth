@@ -18,6 +18,7 @@ var env = map[string]string{
 	"AUTH_SERVICE_API":   "http://localhost:5020",
 	"BACKEND_API":        "http://localhost:5010",
 	"SECRET_SERVICE_API": "http://localhost:5030",
+	"HOSTNAME":           "http://localhost:5020", // used for redirects
 }
 
 func GetEnv(key string) string {

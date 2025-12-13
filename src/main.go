@@ -57,8 +57,8 @@ func main() {
 	mux := http.NewServeMux()
 
 	emailActionService := services.InitEmailActionService()
-	userService := services.InitUserService(db, rdb, emailActionService)
 	secretService := secretServices.InitSecretService()
+	userService := services.InitUserService(db, rdb, emailActionService, secretService)
 	realmService := services.InitRealmService(db, userService, emailActionService, secretService)
 	sessionService := services.InitSessionService(db, rdb)
 
@@ -66,6 +66,7 @@ func main() {
 	controllers.InitUserController(mux, userService)
 	controllers.InitRealmController(mux, realmService)
 	controllers.InitEmailActionController(mux, emailActionService)
+	controllers.InitHealthController(mux)
 
 	log.Println("Server started on port 5020")
 	if err := http.ListenAndServe(":5020", mux); err != nil {

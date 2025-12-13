@@ -6,7 +6,6 @@ WORKDIR /app
 # Enable Go modules
 ENV CGO_ENABLED=0
 ENV GOOS=linux
-ENV GOARCH=amd64
 
 # Download dependencies first (cached)
 COPY go.mod go.sum ./

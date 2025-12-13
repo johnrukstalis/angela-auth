@@ -27,6 +27,7 @@ type SessionService struct {
 	client         *http.Client
 	keycloakAPI    string
 	authServiceAPI string
+	hostname       string
 }
 
 func InitSessionService(db *sql.DB, rdb *redis.Client) *SessionService {
@@ -36,6 +37,7 @@ func InitSessionService(db *sql.DB, rdb *redis.Client) *SessionService {
 		client:         utilities.NewHttpClient(),
 		keycloakAPI:    utilities.GetEnv("KEYCLOAK_API"),
 		authServiceAPI: utilities.GetEnv("AUTH_SERVICE_API"),
+		hostname:       utilities.GetEnv("HOSTNAME"),
 	}
 }
 
@@ -57,7 +59,7 @@ func (s SessionService) GetSession(sessionID string) (models.OauthSession, error
 
 func (s SessionService) CreateSession(realm string) (models.OauthSession, string, error) {
 	oauthConfig := &oauth2.Config{
-		RedirectURL: fmt.Sprintf("%s/api/v1/auth/session/callback/login", s.authServiceAPI),
+		RedirectURL: fmt.Sprintf("%s/api/v1/auth/session/callback/login", s.hostname),
 		Scopes:      []string{oidc.ScopeOpenID, "profile", "email"},
 	}
 
@@ -308,7 +310,7 @@ func (s SessionService) getUserInfo(realm string, accessToken string) (models.Ke
 }
 
 func (s UserService) LoginAsAdmin() (string, error) {
-	return s.Login("admin", "admin", "admin-cli", nil)
+	return s.Login(s.adminUsername, s.adminPassword, "admin-cli", nil)
 }
 
 func (s UserService) Login(username, password, clientID string, clientSecret *string) (string, error) {

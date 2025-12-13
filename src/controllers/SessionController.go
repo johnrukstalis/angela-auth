@@ -38,13 +38,13 @@ func InitSessionController(mux *http.ServeMux, sessionService *services.SessionS
 func (c SessionController) login(w http.ResponseWriter, r *http.Request) {
 	realm := r.URL.Query().Get("realm")
 	if realm == "" {
-		http.Redirect(w, r, fmt.Sprintf("%s/?error=invalid_realm", c.backendAPI), http.StatusFound)
+		http.Redirect(w, r, fmt.Sprintf("%s/backend/?error=invalid_realm", c.backendAPI), http.StatusFound)
 		return
 	}
 
 	session, sessionID, err := c.sessionService.CreateSession(realm)
 	if err != nil {
-		http.Redirect(w, r, fmt.Sprintf("%s/?error=invalid_realm", c.backendAPI), http.StatusFound)
+		http.Redirect(w, r, fmt.Sprintf("%s/backend/?error=invalid_realm", c.backendAPI), http.StatusFound)
 		return
 	}
 
@@ -110,7 +110,7 @@ func (c SessionController) loginCallback(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("%s/api/v1/auth/session/callback/login?sessionID=%s", c.backendAPI, sessionID), http.StatusFound)
+	http.Redirect(w, r, fmt.Sprintf("%s/backend/api/v1/auth/session/callback/login?sessionID=%s", c.backendAPI, sessionID), http.StatusFound)
 }
 
 // GET SESSION

@@ -23,6 +23,7 @@ type RealmService struct {
 	userService        *UserService
 	emailActionService *EmailActionService
 	secretService      *secretServices.SecretService
+	hostname           string
 }
 
 func InitRealmService(db *sql.DB, userService *UserService, emailActionService *EmailActionService, secretService *secretServices.SecretService) *RealmService {
@@ -31,6 +32,7 @@ func InitRealmService(db *sql.DB, userService *UserService, emailActionService *
 		db:                 db,
 		keycloakAPI:        utilities.GetEnv("KEYCLOAK_API"),
 		authServiceAPI:     utilities.GetEnv("AUTH_SERVICE_API"),
+		hostname:           utilities.GetEnv("HOSTNAME"),
 		userService:        userService,
 		emailActionService: emailActionService,
 		secretService:      secretService,
@@ -63,8 +65,8 @@ func (s RealmService) Create(tenant, email string) error {
 				Protocol:     "openid-connect",
 				PublicClient: false,
 				RedirectURIs: []string{
-					fmt.Sprintf("%s/api/v1/auth/session/callback/login", s.authServiceAPI),
-					fmt.Sprintf("%s/api/v1/auth/emailAction/callback", s.authServiceAPI),
+					fmt.Sprintf("%s/api/v1/auth/session/callback/login", s.hostname),
+					fmt.Sprintf("%s/api/v1/auth/emailAction/callback", s.hostname),
 				},
 				StandardFlowEnabled:       true,
 				DirectAccessGrantsEnabled: true,

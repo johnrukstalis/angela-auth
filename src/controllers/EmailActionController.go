@@ -27,5 +27,5 @@ func InitEmailActionController(mux *http.ServeMux, emailActionService *services.
 }
 
 func (c EmailActionController) callback(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, fmt.Sprintf("%s/api/v1/auth/emailAction/callback", c.backendAPI), http.StatusFound)
+	http.Redirect(w, r, fmt.Sprintf("%s/backend/api/v1/auth/emailAction/callback", c.backendAPI), http.StatusFound)
 }
