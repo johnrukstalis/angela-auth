@@ -13,7 +13,6 @@ import (
 
 	"github.com/johnrukstalis/angela-auth/src/controllers"
 	"github.com/johnrukstalis/angela-auth/src/services"
-	secretServices "github.com/johnrukstalis/angela-auth/src/services/secrets"
 	"github.com/johnrukstalis/angela-auth/src/utilities"
 )
 
@@ -57,9 +56,8 @@ func main() {
 	mux := http.NewServeMux()
 
 	emailActionService := services.InitEmailActionService()
-	secretService := secretServices.InitSecretService()
-	userService := services.InitUserService(db, rdb, emailActionService, secretService)
-	realmService := services.InitRealmService(db, userService, emailActionService, secretService)
+	userService := services.InitUserService(db, rdb, emailActionService)
+	realmService := services.InitRealmService(db, userService, emailActionService)
 	sessionService := services.InitSessionService(db, rdb)
 
 	controllers.InitSessionController(mux, sessionService)

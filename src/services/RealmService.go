@@ -7,10 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/johnrukstalis/angela-auth/src/models"
-	secretServices "github.com/johnrukstalis/angela-auth/src/services/secrets"
 	"github.com/johnrukstalis/angela-auth/src/utilities"
 	"github.com/johnrukstalis/zlog"
 )
@@ -22,11 +20,12 @@ type RealmService struct {
 	keycloakAPI        string
 	userService        *UserService
 	emailActionService *EmailActionService
-	secretService      *secretServices.SecretService
 	hostname           string
+	smtpEmail          string
+	smtpPassword       string
 }
 
-func InitRealmService(db *sql.DB, userService *UserService, emailActionService *EmailActionService, secretService *secretServices.SecretService) *RealmService {
+func InitRealmService(db *sql.DB, userService *UserService, emailActionService *EmailActionService) *RealmService {
 	return &RealmService{
 		client:             utilities.NewHttpClient(),
 		db:                 db,
@@ -35,25 +34,13 @@ func InitRealmService(db *sql.DB, userService *UserService, emailActionService *
 		hostname:           utilities.GetEnv("HOSTNAME"),
 		userService:        userService,
 		emailActionService: emailActionService,
-		secretService:      secretService,
+		smtpEmail:          utilities.GetEnv("SMTP_EMAIL"),
+		smtpPassword:       utilities.GetEnv("SMTP_PASSWORD"),
 	}
 }
 
 func (s RealmService) Create(tenant, email string) error {
 	clientSecret := utilities.GenerateRandomEncodedByteString(32)
-
-	secrets, err := s.secretService.GetKV("secret", "smtp")
-	if err != nil {
-		zlog.Error("failed to get secrets", err)
-		return err
-	}
-
-	username, _, found := strings.Cut(email, "@")
-	if !found {
-		msg := "invalid email address"
-		zlog.Error(msg, nil)
-		return fmt.Errorf(msg)
-	}
 
 	payload := models.RealmRepresentation{
 		Realm:   tenant,
@@ -76,7 +63,7 @@ func (s RealmService) Create(tenant, email string) error {
 		},
 		Users: []models.UserRepresentation{
 			{
-				Username:      username,
+				Username:      email,
 				Enabled:       true,
 				Email:         email,
 				EmailVerified: false,
@@ -92,10 +79,10 @@ func (s RealmService) Create(tenant, email string) error {
 		SMTPServer: models.SMTPRepresentation{
 			Host:            "smtp.gmail.com",
 			Port:            "587",
-			From:            secrets["email"],
+			From:            s.smtpEmail,
 			FromDisplayName: "Angela",
-			User:            secrets["email"],
-			Password:        secrets["password"],
+			User:            s.smtpEmail,
+			Password:        s.smtpPassword,
 			Auth:            "true",
 			SSL:             "false",
 			StartTLS:        "true",
@@ -152,7 +139,7 @@ func (s RealmService) Create(tenant, email string) error {
 		return err
 	}
 
-	user, err := s.userService.GetByUsername(tenant, username, token)
+	user, err := s.userService.GetByUsername(tenant, email, token)
 	if err != nil {
 		zlog.Error("failed to get user", err)
 		return err

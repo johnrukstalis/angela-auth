@@ -14,11 +14,16 @@ var env = map[string]string{
 	"REDIS_PASSWORD": "",
 	"REDIS_DB":       "0",
 
-	"KEYCLOAK_API":       "http://localhost:8080",
-	"AUTH_SERVICE_API":   "http://localhost:5020",
-	"BACKEND_API":        "http://localhost:5010",
-	"SECRET_SERVICE_API": "http://localhost:5030",
-	"HOSTNAME":           "http://localhost:5020", // used for redirects
+	"KEYCLOAK_API":     "http://localhost:8080",
+	"AUTH_SERVICE_API": "http://localhost:5020",
+	"BACKEND_API":      "http://localhost:5010",
+	"HOSTNAME":         "http://localhost:5020", // used for redirects
+
+	"SMTP_EMAIL":    "john.rukstalis@gmail.com",
+	"SMTP_PASSWORD": "yblqksffjcjlzbwq",
+
+	"KEYCLOAK_ADMIN_USERNAME": "admin",
+	"KEYCLOAK_ADMIN_PASSWORD": "admin",
 }
 
 func GetEnv(key string) string {

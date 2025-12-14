@@ -6,13 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"path"
 	"strings"
 
 	"github.com/johnrukstalis/angela-auth/src/models"
-	secretServices "github.com/johnrukstalis/angela-auth/src/services/secrets"
 	"github.com/johnrukstalis/angela-auth/src/utilities"
 	"github.com/johnrukstalis/zlog"
 	"github.com/redis/go-redis/v9"
@@ -28,28 +26,15 @@ type UserService struct {
 	adminPassword      string
 }
 
-func InitUserService(db *sql.DB, rdb *redis.Client, emailActionService *EmailActionService, secret *secretServices.SecretService) *UserService {
-	kv, err := secret.GetKV("secret", "keycloak")
-	if err != nil {
-		zlog.Error("failed to get secrets for keycloak", err)
-		log.Fatal("failed to get secrets for keyclaoks")
-	}
-
-	username, uok := kv["username"]
-	password, pok := kv["password"]
-	if !uok || !pok {
-		zlog.Error("failed to get secrets for keycloak", nil)
-		log.Fatal("failed to get secrets from keycloak")
-	}
-
+func InitUserService(db *sql.DB, rdb *redis.Client, emailActionService *EmailActionService) *UserService {
 	return &UserService{
 		db:                 db,
 		rdb:                rdb,
 		client:             utilities.NewHttpClient(),
 		keycloakAPI:        utilities.GetEnv("KEYCLOAK_API"),
 		emailActionService: emailActionService,
-		adminUsername:      username,
-		adminPassword:      password,
+		adminUsername:      utilities.GetEnv("KEYCLOAK_ADMIN_USERNAME"),
+		adminPassword:      utilities.GetEnv("KEYCLOAK_ADMIN_PASSWORD"),
 	}
 }
 
