@@ -17,7 +17,6 @@ var env = map[string]string{
 	"KEYCLOAK_API":     "http://localhost:8080",
 	"AUTH_SERVICE_API": "http://localhost:5020",
 	"BACKEND_API":      "http://localhost:5010",
-	"HOSTNAME":         "http://localhost:5020", // used for redirects
 
 	"SMTP_EMAIL":    "john.rukstalis@gmail.com",
 	"SMTP_PASSWORD": "yblqksffjcjlzbwq",
