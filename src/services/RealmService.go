@@ -22,6 +22,7 @@ type RealmService struct {
 	emailActionService *EmailActionService
 	smtpEmail          string
 	smtpPassword       string
+	publicURL          string
 }
 
 func InitRealmService(db *sql.DB, userService *UserService, emailActionService *EmailActionService) *RealmService {
@@ -34,6 +35,7 @@ func InitRealmService(db *sql.DB, userService *UserService, emailActionService *
 		emailActionService: emailActionService,
 		smtpEmail:          utilities.GetEnv("SMTP_EMAIL"),
 		smtpPassword:       utilities.GetEnv("SMTP_PASSWORD"),
+		publicURL:          utilities.GetEnv("PUBLIC_URL"),
 	}
 }
 
@@ -50,13 +52,13 @@ func (s RealmService) Create(tenant, email string) error {
 				Protocol:     "openid-connect",
 				PublicClient: false,
 				RedirectURIs: []string{
-					fmt.Sprintf("%s/api/v1/auth/session/callback/login", s.authServiceAPI),
-					fmt.Sprintf("%s/api/v1/auth/emailAction/callback", s.authServiceAPI),
+					fmt.Sprintf("%s/api/v1/auth/session/callback/login", s.publicURL),
+					fmt.Sprintf("%s/api/v1/auth/emailAction/callback", s.publicURL),
 				},
 				StandardFlowEnabled:       true,
 				DirectAccessGrantsEnabled: true,
 				ServiceAccountsEnabled:    true,
-				RootURL:                   fmt.Sprintf("%s", s.authServiceAPI),
+				RootURL:                   fmt.Sprintf("%s", s.publicURL),
 			},
 		},
 		Users: []models.UserRepresentation{

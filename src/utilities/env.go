@@ -17,6 +17,7 @@ var env = map[string]string{
 	"KEYCLOAK_API":     "http://localhost:8080",
 	"AUTH_SERVICE_API": "http://localhost:5020",
 	"BACKEND_API":      "http://localhost:5010",
+	"PUBLIC_URL":       "http://localhost:5020", // used for redirects in kubernetes, dns/hostname of auth service
 
 	"SMTP_EMAIL":    "john.rukstalis@gmail.com",
 	"SMTP_PASSWORD": "yblqksffjcjlzbwq",
