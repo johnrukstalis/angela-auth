@@ -52,8 +52,7 @@ func (s RealmService) Create(tenant, email string) error {
 				Protocol:     "openid-connect",
 				PublicClient: false,
 				RedirectURIs: []string{
-					fmt.Sprintf("%s/api/v1/auth/session/callback/login", s.publicURL),
-					fmt.Sprintf("%s/api/v1/auth/emailAction/callback", s.publicURL),
+					fmt.Sprintf("%s/api/v1/auth/*", s.publicURL),
 				},
 				StandardFlowEnabled:       true,
 				DirectAccessGrantsEnabled: true,
