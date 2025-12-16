@@ -64,5 +64,5 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/my-app:${{ steps.version.outputs.version }}
-            ${{ secrets.DOCKER_USERNAME }}/my-app:latest
+            ${{ secrets.DOCKER_USERNAME }}/angela-auth:${{ steps.version.outputs.version }}
+            ${{ secrets.DOCKER_USERNAME }}/angela-auth:latest
