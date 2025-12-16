@@ -1,5 +1,13 @@
 # Angela Auth Service
 
+## Tagging for New Versions
+
+- git add .
+- git commit -m "Release 1.0.0"
+- git push origin main
+- git tag v1.0.0
+- git push origin v1.0.0
+
 ## Set up required services
 
 - docker compose -f docker-compose.develop.yml up -d

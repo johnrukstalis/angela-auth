@@ -1,4 +1,4 @@
-name: CI - Build & Test Go App
+name: Build and Test Go App
 
 on:
   pull_request:
